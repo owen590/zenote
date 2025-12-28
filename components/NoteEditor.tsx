@@ -533,7 +533,7 @@ ${continuation}`;
   return (
     <div className="flex flex-col h-full bg-white dark:bg-zinc-900 relative">
       {/* Top Bar */}
-      <div className="h-12 pt-safe border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between px-4 lg:px-8 shrink-0 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm z-20">
+      <div className="h-16 pt-safe border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between px-4 lg:px-8 shrink-0 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm z-20">
         <div className="flex items-center gap-2">
           {onBack && (
             <button onClick={onBack} className="md:hidden p-2 -ml-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">

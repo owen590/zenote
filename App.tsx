@@ -608,7 +608,7 @@ const App: React.FC = () => {
       try {
         const headResponse = await fetch(baseUrl.origin, {
           method: 'HEAD',
-          mode: 'no-cors',
+          mode: 'cors',
           credentials: 'include'
         });
         console.log('HEAD request to origin succeeded:', headResponse.status);
@@ -651,7 +651,7 @@ const App: React.FC = () => {
         headers: {
           'Authorization': authHeader
         },
-        mode: 'no-cors',
+        mode: 'cors',
         credentials: 'include'
       });
 
@@ -661,9 +661,22 @@ const App: React.FC = () => {
         url: dirUrl.toString()
       });
 
-      // In no-cors mode, we can't access response status, so assume directory is ready
-      directoryReady = true;
-      console.log('Directory operation completed (no-cors mode, assuming success)');
+      // Check if directory creation succeeded or already exists
+      if (mkcolResponse.status >= 200 && mkcolResponse.status < 300) {
+        // Directory created successfully
+        directoryReady = true;
+        console.log('Directory created successfully');
+      } else if (mkcolResponse.status === 405 || mkcolResponse.status === 409) {
+        // Method Not Allowed or Conflict - directory likely already exists
+        directoryReady = true;
+        console.log('Directory already exists or creation not allowed (continuing)');
+      } else if (mkcolResponse.status === 401 || mkcolResponse.status === 403) {
+        // Authentication error
+        throw new Error(`身份验证失败(401/403)：请检查用户名和应用密码。坚果云用户必须使用“第三方应用密码”。`);
+      } else {
+        // Other error
+        throw new Error(`WebDAV 服务器返回错误：${mkcolResponse.status} ${mkcolResponse.statusText}`);
+      }
     } catch (error) {
       console.error('Directory operation failed:', error);
 
@@ -683,13 +696,14 @@ const App: React.FC = () => {
         }
       }
 
-      // 简化错误信息
-      let simplifiedError = errorMsg;
+      // 提供更具体的错误信息
+      let detailedErrorMsg = '\n\n可能的原因：\n1. WebDAV服务器地址不正确（需包含https://和路径）\n2. 网络连接问题\n3. 坚果云用户未使用“第三方应用密码”\n4. 浏览器环境下的CORS限制（最常见原因）';
+
       if (isNutstore) {
-        simplifiedError += '\n坚果云用户需使用第三方应用密码，并确保地址包含/dav/';
+        detailedErrorMsg += '\n\n【坚果云(Nutstore)用户特别提示】：\n1. 必须使用“第三方应用密码”，在坚果云官网设置->安全中生成。\n2. 地址必须包含 /dav/，例如：https://dav.jianguoyun.com/dav/';
       }
 
-      throw new Error(simplifiedError);
+      throw new Error(`${errorMsg}${detailedErrorMsg}`);
     }
 
     // Ensure we have a valid directory before proceeding
@@ -713,15 +727,15 @@ const App: React.FC = () => {
       // Upload the note to WebDAV
       try {
         const response = await fetch(noteUrl.toString(), {
-        method: 'PUT',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'text/markdown'
-        },
-        body: markdownContent,
-        mode: 'no-cors',
-        credentials: 'include'
-      });
+          method: 'PUT',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'text/markdown'
+          },
+          body: markdownContent,
+          mode: 'cors',
+          credentials: 'include'
+        });
 
         console.log('Note upload response:', {
           status: response.status,
@@ -730,9 +744,17 @@ const App: React.FC = () => {
           url: noteUrl.toString()
         });
 
-        // In no-cors mode, we can't access response status, so assume upload success
-        uploadCount++;
-        console.log('Note upload completed (no-cors mode, assuming success):', note.title || 'Untitled Note');
+        if (!response.ok) {
+          failedCount++;
+          // If we get authentication errors, this is critical
+          if (response.status === 401 || response.status === 403) {
+            throw new Error(`身份验证失败：${response.status} ${response.statusText}`);
+          }
+          console.error(`Failed to upload note ${note.title || note.id}: ${response.status} ${response.statusText}`);
+        } else {
+          uploadCount++;
+          console.log('Note upload successful:', note.title || 'Untitled Note');
+        }
       } catch (error) {
         failedCount++;
         console.error('Note upload error:', error);
@@ -795,7 +817,7 @@ const App: React.FC = () => {
           'Content-Type': 'application/json'
         },
         body: notesJsonContent,
-        mode: 'no-cors',
+        mode: 'cors',
         credentials: 'include'
       });
 
@@ -804,8 +826,13 @@ const App: React.FC = () => {
         statusText: notesJsonResponse.statusText
       });
 
-      // In no-cors mode, we can't access response status, so assume metadata upload success
-      console.log('Notes metadata upload completed (no-cors mode, assuming success)');
+      if (!notesJsonResponse.ok) {
+        // Metadata upload failure is important but not fatal
+        console.error(`Failed to upload notes metadata: ${notesJsonResponse.status} ${notesJsonResponse.statusText}`);
+        // We'll continue but log this as a warning
+      } else {
+        console.log('Notes metadata upload successful');
+      }
     } catch (error) {
       console.error('Notes metadata upload error:', error);
       // This is not fatal, continue with sync completion
@@ -1077,7 +1104,7 @@ const App: React.FC = () => {
         </section>
       </div>
 
-      <div className="p-4 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="p-4 pb-safe border-t border-zinc-200 dark:border-zinc-800">
         <button
           onClick={() => setShowSettings(true)}
           className="mt-2 w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
@@ -1249,7 +1276,7 @@ const App: React.FC = () => {
       ${mobileView === ViewMode.EDIT ? 'hidden md:flex' : 'flex'}
       md:max-w-md md:flex-1 md:border-r border-zinc-200 dark:border-zinc-800
     `}>
-        <div className="h-16 px-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+        <div className="pt-safe h-[calc(4rem+env(safe-area-inset-top))] px-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
           {selectionMode ? (
             // Selection Mode Header
             <>
@@ -1345,7 +1372,8 @@ const App: React.FC = () => {
                 handleCreateNote();
               }
             }}
-            className="fixed bottom-4 right-6 w-16 h-16 bg-accent-600 dark:bg-accent-500 text-white rounded-full font-medium shadow-xl flex items-center justify-center z-40"
+            className="fixed bottom-safe right-6 w-12 h-12 bg-accent-600 dark:bg-accent-500 text-white rounded-full font-medium shadow-xl flex items-center justify-center z-40"
+            style={{ bottom: 'calc(4px + env(safe-area-inset-bottom))' }}
             ref={(el) => {
               if (el) {
                 let isDragging = false;
@@ -1461,7 +1489,7 @@ const App: React.FC = () => {
               }
             }}
           >
-            <Plus size={24} />
+            <Plus size={20} />
           </button>
         </div>
         {/* Desktop FAB is usually not needed if "New Note" is accessible, but for consistency let's put it in the list header or bottom */}
