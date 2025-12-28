@@ -1104,7 +1104,7 @@ const App: React.FC = () => {
         </section>
       </div>
 
-      <div className="p-4 pb-safe border-t border-zinc-200 dark:border-zinc-800">
+      <div className="p-4 border-t border-zinc-200 dark:border-zinc-800">
         <button
           onClick={() => setShowSettings(true)}
           className="mt-2 w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
@@ -1276,7 +1276,7 @@ const App: React.FC = () => {
       ${mobileView === ViewMode.EDIT ? 'hidden md:flex' : 'flex'}
       md:max-w-md md:flex-1 md:border-r border-zinc-200 dark:border-zinc-800
     `}>
-        <div className="pt-safe h-[calc(4rem+env(safe-area-inset-top))] px-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+        <div className="h-16 px-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
           {selectionMode ? (
             // Selection Mode Header
             <>
@@ -1372,8 +1372,7 @@ const App: React.FC = () => {
                 handleCreateNote();
               }
             }}
-            className="fixed bottom-safe right-6 w-12 h-12 bg-accent-600 dark:bg-accent-500 text-white rounded-full font-medium shadow-xl flex items-center justify-center z-40"
-            style={{ bottom: 'calc(4px + env(safe-area-inset-bottom))' }}
+            className="fixed bottom-4 right-6 w-16 h-16 bg-accent-600 dark:bg-accent-500 text-white rounded-full font-medium shadow-xl flex items-center justify-center z-40"
             ref={(el) => {
               if (el) {
                 let isDragging = false;
@@ -1489,7 +1488,7 @@ const App: React.FC = () => {
               }
             }}
           >
-            <Plus size={20} />
+            <Plus size={24} />
           </button>
         </div>
         {/* Desktop FAB is usually not needed if "New Note" is accessible, but for consistency let's put it in the list header or bottom */}
@@ -1586,13 +1585,13 @@ const App: React.FC = () => {
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between h-16">
-            <h2 className="text-xl font-bold text-zinc-800 dark:text-white">{t('settings')}</h2>
+          <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-zinc-800 dark:text-white">{t('settings')}</h2>
             <button
               onClick={() => setShowSettings(false)}
-              className="p-1 text-zinc-500 hover:text-accent-600 rounded-lg transition-colors"
+              className="p-2 text-zinc-500 hover:text-accent-600 rounded-lg transition-colors"
             >
-              <X size={20} />
+              <X size={24} />
             </button>
           </div>
 
@@ -1601,7 +1600,7 @@ const App: React.FC = () => {
             <div className="flex">
               <button
                 onClick={() => setActiveSettingsTab('language')}
-                className={`px-6 py-2 font-medium transition-colors relative ${activeSettingsTab === 'language' ? 'text-accent-600' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
+                className={`px-6 py-4 font-medium transition-colors relative ${activeSettingsTab === 'language' ? 'text-accent-600' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
               >
                 {t('language')}
                 {activeSettingsTab === 'language' && (
@@ -1610,7 +1609,7 @@ const App: React.FC = () => {
               </button>
               <button
                 onClick={() => setActiveSettingsTab('sync')}
-                className={`px-6 py-2 font-medium transition-colors relative ${activeSettingsTab === 'sync' ? 'text-accent-600' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
+                className={`px-6 py-4 font-medium transition-colors relative ${activeSettingsTab === 'sync' ? 'text-accent-600' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
               >
                 {t('sync')}
                 {activeSettingsTab === 'sync' && (
@@ -1619,7 +1618,7 @@ const App: React.FC = () => {
               </button>
               <button
                 onClick={() => setActiveSettingsTab('gemini')}
-                className={`px-6 py-2 font-medium transition-colors relative ${activeSettingsTab === 'gemini' ? 'text-accent-600' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
+                className={`px-6 py-4 font-medium transition-colors relative ${activeSettingsTab === 'gemini' ? 'text-accent-600' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'}`}
               >
                 {t('gemini')}
                 {activeSettingsTab === 'gemini' && (
@@ -1630,7 +1629,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Tab Content */}
-          <div className="p-4">
+          <div className="p-6">
             {activeSettingsTab === 'language' && (
               <div className="space-y-6">
                 <div>
@@ -1717,29 +1716,20 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={handleManualSync}
-                      disabled={!webdavEnabled || syncInProgress || !syncUrl || !syncUsername || !syncPassword}
-                      className={`flex-1 px-2 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${!webdavEnabled || !syncUrl || !syncUsername || !syncPassword ? 'bg-zinc-300 dark:bg-zinc-600 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' : syncInProgress ? 'bg-accent-400 dark:bg-accent-700 text-white' : 'bg-accent-600 hover:bg-accent-700 dark:bg-accent-600 dark:hover:bg-accent-700 text-white'}`}
-                    >
-                      {syncInProgress ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
-                          {t('syncing')}
-                        </>
-                      ) : (
-                        t('syncNow')
-                      )}
-                    </button>
-
-                    <button
-                      onClick={handleSaveSettings}
-                      className="flex-1 px-2 py-1.5 bg-accent-600 hover:bg-accent-600 text-white font-medium rounded-lg transition-colors shadow-md"
-                    >
-                      {t('save')}
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleManualSync}
+                    disabled={!webdavEnabled || syncInProgress || !syncUrl || !syncUsername || !syncPassword}
+                    className={`w-full mt-4 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${!webdavEnabled || !syncUrl || !syncUsername || !syncPassword ? 'bg-zinc-300 dark:bg-zinc-600 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' : syncInProgress ? 'bg-accent-400 dark:bg-accent-700 text-white' : 'bg-accent-600 hover:bg-accent-700 dark:bg-accent-600 dark:hover:bg-accent-700 text-white'}`}
+                  >
+                    {syncInProgress ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        {t('syncing')}
+                      </>
+                    ) : (
+                      t('syncNow')
+                    )}
+                  </button>
                 </div>
 
                 {syncStatus && (
@@ -1753,6 +1743,16 @@ const App: React.FC = () => {
             {activeSettingsTab === 'gemini' && (
               <GeminiSettings t={t} />
             )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+            <button
+              onClick={handleSaveSettings}
+              className="px-8 py-3 bg-accent-600 hover:bg-accent-600 text-white font-medium rounded-lg transition-colors shadow-md"
+            >
+              {t('save')}
+            </button>
           </div>
         </div>
       </div>
