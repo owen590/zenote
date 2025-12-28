@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>zenote</title>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Han+Serif+SC:wght@300;400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+    <!-- Google Sign-In API -->
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Source Han Serif SC', 'Noto Sans', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              accent: {
+                50: '#f0f4ff',
+                100: '#e0eaff',
+                500: '#0145f2', // 用户要求的主色调
+                600: '#013dd9', // 深色变体
+                900: '#012587', // 最深色变体
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Custom Scrollbar for a cleaner look */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #e4e4e7;
+        border-radius: 4px;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #3f3f46;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #a1a1aa;
+      }
+      /* Safe area utilities */
+      .pt-safe {
+        padding-top: env(safe-area-inset-top);
+        padding-top: var(--sat, env(safe-area-inset-top));
+      }
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-bottom: var(--sab, env(safe-area-inset-bottom));
+      }
+      .pl-safe {
+        padding-left: env(safe-area-inset-left);
+        padding-left: var(--sal, env(safe-area-inset-left));
+      }
+      .pr-safe {
+        padding-right: env(safe-area-inset-right);
+        padding-right: var(--sar, env(safe-area-inset-right));
+      }
+      .mt-safe {
+        margin-top: env(safe-area-inset-top);
+        margin-top: var(--sat, env(safe-area-inset-top));
+      }
+      .mb-safe {
+        margin-bottom: env(safe-area-inset-bottom);
+        margin-bottom: var(--sab, env(safe-area-inset-bottom));
+      }
+      /* Ensure body uses safe areas */
+      body {
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "html-to-image": "https://esm.sh/html-to-image@^1.11.11"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 antialiased overflow-hidden selection:bg-accent-100 dark:selection:bg-accent-900">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

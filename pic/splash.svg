@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+  <!-- Background with zen-like gradient -->
+  <defs>
+    <linearGradient id="zenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f0f4f8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d9e2ec;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4f46e5;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main background -->
+  <rect width="2732" height="2732" fill="url(#zenGradient)" />
+  
+  <!-- Centered note icon -->
+  <g transform="translate(1110, 1110)">
+    <!-- Note shape -->
+    <rect x="0" y="0" width="512" height="512" rx="16" fill="white" stroke="#cbd5e1" stroke-width="32" />
+    
+    <!-- Note lines -->
+    <path d="M64 100h384M64 164h384M64 228h320M64 292h320" stroke="#cbd5e1" stroke-width="16" stroke-linecap="round" />
+    
+    <!-- Accent line with zen symbol -->
+    <path d="M64 356h224" stroke="url(#accentGradient)" stroke-width="32" stroke-linecap="round" />
+    
+    <!-- Simple zen dot -->
+    <circle cx="416" cy="356" r="24" fill="url(#accentGradient)" />
+  </g>
+  
+  <!-- App name -->
+  <text x="1366" y="1900" font-family="system-ui, -apple-system, sans-serif" font-size="160" font-weight="300" fill="#475569" text-anchor="middle">zenote</text>
+  
+
+</svg>
