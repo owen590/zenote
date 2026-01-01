@@ -557,24 +557,37 @@ const App: React.FC = () => {
     // Determine if we're in local development environment
     const isLocalDev = isBrowser && (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'));
     
+    // Determine if we're in Vercel environment
+    const isVercel = isBrowser && window.location.hostname.includes('vercel.app');
+    
+    // Determine if we're in GitHub Pages environment
+    const isGitHubPages = isBrowser && window.location.hostname.includes('github.io');
+    
     // Log environment information for debugging
     console.log('WebDAV Environment Debug:', {
       isBrowser: isBrowser,
       origin: isBrowser ? window.location.origin : 'Not in browser',
       isLocalDev: isLocalDev,
+      isVercel: isVercel,
+      isGitHubPages: isGitHubPages,
       isNutstore: isNutstore,
       originalUrl: url
     });
     
-    // Use proxy path for Nutstore in both local development and production environment
-    // This ensures consistency between local and Vercel/GitHub Pages environments
+    // Use different strategies based on environment
     let clientUrl = url;
     if (isBrowser && isNutstore) {
-      // Replace Nutstore URL with proxy URL path (including /dav/) for both environments
-      const urlObj = new URL(url);
-      // Extract pathname (including /dav/) for proxy
-      clientUrl = urlObj.pathname;
-      console.log('Using proxy URL for Nutstore:', clientUrl, 'in', isLocalDev ? 'local' : 'production', 'environment');
+      if (isLocalDev || isVercel) {
+        // Use proxy URL path (including /dav/) for local and Vercel environments
+        const urlObj = new URL(url);
+        clientUrl = urlObj.pathname;
+        console.log('Using proxy URL for Nutstore:', clientUrl, 'in', isLocalDev ? 'local' : 'Vercel', 'environment');
+      } else {
+        // For GitHub Pages (and other static hosts), use full URL since no proxy is available
+        // This allows direct WebDAV connection (may have CORS issues)
+        clientUrl = url;
+        console.log('Using full URL for Nutstore in GitHub Pages/environment without proxy support');
+      }
     }
     
     // Additional URL validation for Nutstore
@@ -636,6 +649,10 @@ const App: React.FC = () => {
         errorMsg += '\n\n【坚果云用户提示】：\n1. 必须使用“第三方应用密码”，在坚果云官网设置->安全中生成\n2. 地址必须包含 /dav/，例如：https://dav.jianguoyun.com/dav/';
       }
       
+      if (isGitHubPages) {
+        errorMsg += '\n\n【GitHub Pages 用户提示】：\nGitHub Pages 不支持自定义代理配置，可能导致跨域访问失败。\n建议使用 Vercel 或其他支持代理的托管平台部署，以获得更好的 WebDAV 同步体验。\n使用 Vercel 部署步骤：\n1. 连接 GitHub 仓库到 Vercel\n2. 无需额外配置，自动使用 vercel.json 中的代理规则\n3. 部署后即可正常使用 WebDAV 同步功能';
+      }
+      
       throw new Error(errorMsg);
     }
 
@@ -679,6 +696,10 @@ const App: React.FC = () => {
       
       if (isNutstore) {
         errorMsg += '\n\n【坚果云用户提示】：\n1. 必须使用“第三方应用密码”，在坚果云官网设置->安全中生成\n2. 地址必须包含 /dav/，例如：https://dav.jianguoyun.com/dav/';
+      }
+      
+      if (isGitHubPages) {
+        errorMsg += '\n\n【GitHub Pages 用户提示】：\nGitHub Pages 不支持自定义代理配置，可能导致跨域访问失败。\n建议使用 Vercel 或其他支持代理的托管平台部署，以获得更好的 WebDAV 同步体验。\n使用 Vercel 部署步骤：\n1. 连接 GitHub 仓库到 Vercel\n2. 无需额外配置，自动使用 vercel.json 中的代理规则\n3. 部署后即可正常使用 WebDAV 同步功能';
       }
       
       throw new Error(errorMsg);
