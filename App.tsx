@@ -554,15 +554,23 @@ const App: React.FC = () => {
     // Detect Nutstore (坚果云) to provide better tips and use proxy
     const isNutstore = url.includes('jianguoyun.com');
     
-    // Use proxy for Nutstore in browser environment
+    // Determine if we're in local development environment
+    const isLocalDev = isBrowser && (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'));
+    
+    // Use proxy for Nutstore in local development environment
+    // Use full URL in production/GitHub Pages environment
     let clientUrl = url;
-    if (isBrowser && isNutstore) {
-      // Replace Nutstore URL with local proxy URL
-      // 修正代理URL构建，确保不会创建双重/dav路径
+    if (isBrowser && isNutstore && isLocalDev) {
+      // Replace Nutstore URL with local proxy URL when in local development
       const urlObj = new URL(url);
-      // 直接使用本地代理路径，不重复添加/dav
+      // Extract pathname (including /dav/) for proxy
       clientUrl = urlObj.pathname;
-      console.log('Using proxy URL for Nutstore:', clientUrl);
+      console.log('Using local proxy URL for Nutstore:', clientUrl);
+    }
+    
+    // Additional URL validation for Nutstore
+    if (isNutstore && !url.includes('/dav/')) {
+      console.warn('Nutstore URL should contain /dav/ path for proper access');
     }
 
     // Create WebDAV client
