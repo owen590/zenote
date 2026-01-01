@@ -14,6 +14,7 @@ import {
   X,
   Check
 } from 'lucide-react';
+import { createClient } from 'webdav';
 
 // Lazy load heavy components for faster initial load
 const NoteEditor = React.lazy(() => import('./components/NoteEditor'));
@@ -469,6 +470,11 @@ const App: React.FC = () => {
   const [webdavEnabled, setWebdavEnabled] = useState<boolean>(() => {
     return localStorage.getItem('zenote_sync_enabled') === 'true';
   });
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    // 默认启用自动同步
+    const saved = localStorage.getItem('zenote_auto_sync');
+    return saved === null || saved === 'true';
+  });
   const [syncUrl, setSyncUrl] = useState<string>(() => {
     return localStorage.getItem('zenote_sync_url') || '';
   });
@@ -478,10 +484,21 @@ const App: React.FC = () => {
   const [syncPassword, setSyncPassword] = useState<string>(() => {
     return localStorage.getItem('zenote_sync_password') || '';
   });
+  const [syncFolder, setSyncFolder] = useState<string>(() => {
+    return localStorage.getItem('zenote_sync_folder') || 'zenote-notes/';
+  });
+  // 设备名设置，用于WebDAV同步时的文件名前缀
+  const [deviceName, setDeviceName] = useState<string>(() => {
+    // 默认设备名为"Device_"+随机字符串
+    return localStorage.getItem('zenote_device_name') || `Device_${Math.random().toString(36).substring(2, 8)}`;
+  });
 
   // Common Sync State
   const [syncInProgress, setSyncInProgress] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
+  
+  // Auto-sync debounce timer
+  const syncDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
 
 
@@ -506,7 +523,240 @@ const App: React.FC = () => {
     localStorage.setItem('zenote_sync_password', syncPassword);
   }, [syncPassword]);
 
+  useEffect(() => {
+    localStorage.setItem('zenote_sync_folder', syncFolder);
+  }, [syncFolder]);
 
+  useEffect(() => {
+    localStorage.setItem('zenote_auto_sync', autoSyncEnabled.toString());
+  }, [autoSyncEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('zenote_device_name', deviceName);
+  }, [deviceName]);
+
+  // Define syncToWebDAV first using useCallback
+  const syncToWebDAV = useCallback(async (notes: Note[], url: string, username: string, password: string) => {
+    // Validate URL format
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      throw new Error('WebDAV URL必须以http://或https://开头');
+    }
+
+    // Additional URL validation
+    if (!url.endsWith('/')) {
+      url = url + '/';
+      console.log('Added trailing slash to URL:', url);
+    }
+
+    // Check if we're in a browser environment
+    const isBrowser = typeof window !== 'undefined' && !((window as any).Capacitor && (window as any).Capacitor.isNative);
+    
+    // Detect Nutstore (坚果云) to provide better tips and use proxy
+    const isNutstore = url.includes('jianguoyun.com');
+    
+    // Use proxy for Nutstore in browser environment
+    let clientUrl = url;
+    if (isBrowser && isNutstore) {
+      // Replace Nutstore URL with local proxy URL
+      // 修正代理URL构建，确保不会创建双重/dav路径
+      const urlObj = new URL(url);
+      // 直接使用本地代理路径，不重复添加/dav
+      clientUrl = urlObj.pathname;
+      console.log('Using proxy URL for Nutstore:', clientUrl);
+    }
+
+    // Create WebDAV client
+    const client = createClient(clientUrl, {
+      username,
+      password,
+      // Configure for better compatibility with various WebDAV servers
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': '*/*',
+        'Connection': 'keep-alive'
+      }
+    });
+
+    console.log('Created WebDAV client:', {
+      url: url,
+      username: username
+    });
+
+    // Create a directory for the notes if it doesn't exist
+    let dirPath = syncFolder;
+    // Ensure folder ends with trailing slash
+    if (!dirPath.endsWith('/')) {
+      dirPath = dirPath + '/';
+    }
+    // Ensure folder starts with slash
+    if (!dirPath.startsWith('/')) {
+      dirPath = '/' + dirPath;
+    }
+
+    console.log('Attempting to sync to WebDAV:', {
+      baseUrl: url,
+      clientUrl: clientUrl,
+      dirPath: dirPath,
+      notesCount: notes.length
+    });
+
+    try {
+      console.log('Testing WebDAV connection...');
+      // Test connection by getting directory contents
+      await client.getDirectoryContents('/');
+      console.log('WebDAV connection successful');
+    } catch (error) {
+      console.error('WebDAV connection test failed:', error);
+      
+      let errorMsg = 'WebDAV连接失败：';
+      if (error instanceof Error) {
+        errorMsg += error.message;
+      } else {
+        errorMsg += '未知错误';
+      }
+      
+      if (isNutstore) {
+        errorMsg += '\n\n【坚果云用户提示】：\n1. 必须使用“第三方应用密码”，在坚果云官网设置->安全中生成\n2. 地址必须包含 /dav/，例如：https://dav.jianguoyun.com/dav/';
+      }
+      
+      throw new Error(errorMsg);
+    }
+
+    // Try to create directory
+    try {
+      console.log('Attempting to check/create directory:', dirPath);
+      
+      // Check if directory exists
+      let contents;
+      try {
+        contents = await client.getDirectoryContents(dirPath);
+        console.log('Directory already exists:', dirPath);
+      } catch (error) {
+        console.log('Directory does not exist, attempting to create:', dirPath);
+        // Directory doesn't exist, try to create it
+        // For Nutstore, we need a special approach
+        if (isNutstore) {
+          // Nutstore workaround: create an empty file in the directory
+          await client.putFileContents(`${dirPath}/.empty`, '', {
+            overwrite: true,
+            headers: {
+              'Content-Type': 'text/plain'
+            }
+          });
+          console.log('Created Nutstore directory via workaround:', dirPath);
+        } else {
+          // Standard WebDAV directory creation
+          await client.createDirectory(dirPath, { recursive: true });
+          console.log('Created directory successfully:', dirPath);
+        }
+      }
+    } catch (error) {
+      console.error('Directory operation failed:', error);
+      
+      let errorMsg = '目录操作失败：';
+      if (error instanceof Error) {
+        errorMsg += error.message;
+      } else {
+        errorMsg += '未知错误';
+      }
+      
+      if (isNutstore) {
+        errorMsg += '\n\n【坚果云用户提示】：\n1. 必须使用“第三方应用密码”，在坚果云官网设置->安全中生成\n2. 地址必须包含 /dav/，例如：https://dav.jianguoyun.com/dav/';
+      }
+      
+      throw new Error(errorMsg);
+    }
+
+    // Sync each note as a separate markdown file
+    let uploadCount = 0;
+    let failedCount = 0;
+
+    for (const note of notes) {
+      // 生成文件名：设备名+标题.md
+      // 处理边界情况：空标题、特殊字符、唯一性
+      const safeTitle = note.title?.trim() || '无标题';
+      // 移除文件名中可能导致问题的特殊字符
+      const sanitizedTitle = safeTitle.replace(/[<>:/"|?*]/g, '-');
+      // 限制文件名长度
+      const truncatedTitle = sanitizedTitle.substring(0, 50);
+      // 生成最终文件名
+      const noteFileName = `${deviceName}-${truncatedTitle}.md`;
+      const notePath = `${dirPath}${noteFileName}`;
+
+      // Create markdown content
+      const markdownContent = `# ${note.title || 'Untitled Note'}\n\n${note.content}`;
+
+      console.log(`Uploading note: ${note.title || 'Untitled Note'} to ${notePath}`);
+
+      // Upload the note to WebDAV
+      try {
+        await client.putFileContents(notePath, markdownContent, {
+          overwrite: true,
+          headers: {
+            'Content-Type': 'text/markdown'
+          }
+        });
+
+        console.log('Note upload successful:', note.title || 'Untitled Note');
+        uploadCount++;
+      } catch (error) {
+        failedCount++;
+        console.error('Note upload error:', error);
+        
+        // If it's an authentication error, stop the whole process
+        if (error instanceof Error && (error.message.includes('401') || error.message.includes('403'))) {
+          throw new Error(`身份验证失败：${error.message}`);
+        }
+      }
+    }
+
+    console.log('Note upload summary:', {
+      totalNotes: notes.length,
+      uploaded: uploadCount,
+      failed: failedCount
+    });
+
+    // If all notes failed to upload, this is a critical error
+    if (failedCount === notes.length) {
+      throw new Error('所有笔记上传失败，请检查WebDAV配置和网络连接');
+    }
+
+    // Also upload a notes.json file with all note metadata
+    const notesJsonPath = `${dirPath}notes.json`;
+    const notesMetadata = notes.map(note => ({
+      id: note.id,
+      title: note.title,
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+      tags: note.tags,
+      notebookId: note.notebookId
+    }));
+
+    const notesJsonContent = JSON.stringify(notesMetadata, null, 2);
+
+    console.log('Uploading notes metadata to:', notesJsonPath);
+
+    try {
+      await client.putFileContents(notesJsonPath, notesJsonContent, {
+        overwrite: true,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      console.log('Notes metadata upload successful');
+    } catch (error) {
+      console.error('Notes metadata upload error:', error);
+      // This is not fatal, continue with sync completion
+    }
+
+    // Final check: ensure at least some notes were uploaded
+    if (uploadCount === 0 && notes.length > 0) {
+      throw new Error('未上传任何笔记，请检查WebDAV服务器配置和网络连接');
+    }
+
+    console.log('WebDAV sync process completed successfully');
+    console.log(`同步结果：共 ${notes.length} 个笔记，成功上传 ${uploadCount} 个，失败 ${failedCount} 个`);
+  }, [syncFolder, deviceName]);
 
   // --- Effects ---
   useEffect(() => {
@@ -577,275 +827,7 @@ const App: React.FC = () => {
 
 
 
-  // WebDAV Sync Function
-  const syncToWebDAV = async (notes: Note[], url: string, username: string, password: string) => {
-    // Validate URL format
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      throw new Error('WebDAV URL必须以http://或https://开头');
-    }
 
-    // Additional URL validation
-    if (!url.endsWith('/')) {
-      url = url + '/';
-      console.log('Added trailing slash to URL:', url);
-    }
-
-    let baseUrl: URL;
-    try {
-      baseUrl = new URL(url);
-      console.log('Parsed base URL:', {
-        href: baseUrl.href,
-        origin: baseUrl.origin,
-        pathname: baseUrl.pathname,
-        host: baseUrl.host,
-        protocol: baseUrl.protocol,
-        username: username,
-        password: password ? '[REDACTED]' : '[EMPTY]'
-      });
-
-      // Optional URL reachability test (not required for sync)
-      console.log('Testing URL reachability...');
-      try {
-        const headResponse = await fetch(baseUrl.origin, {
-          method: 'HEAD',
-          mode: 'cors',
-          credentials: 'include'
-        });
-        console.log('HEAD request to origin succeeded:', headResponse.status);
-      } catch (headError) {
-        console.warn('HEAD request to origin failed (this is not critical):', headError);
-        // Continue with sync even if HEAD request fails
-      }
-    } catch (error) {
-      console.error('URL parsing error:', error);
-      throw new Error('WebDAV URL格式不正确');
-    }
-
-    // Create a directory for the notes if it doesn't exist
-    const dirPath = 'zenote-notes/';
-    const dirUrl = new URL(dirPath, baseUrl);
-
-    console.log('Attempting to sync to WebDAV:', {
-      baseUrl: baseUrl.toString(),
-      dirUrl: dirUrl.toString(),
-      notesCount: notes.length
-    });
-
-    // Check Basic Auth encoding
-    // Check Basic Auth encoding - Support UTF-8 for username/password
-    const authHeader = 'Basic ' + btoa(unescape(encodeURIComponent(`${username}:${password}`)));
-    console.log('Auth header:', authHeader.substring(0, 20) + '...'); // Don't log full credentials
-
-    // Detect Nutstore (坚果云) to provide better tips
-    const isNutstore = url.includes('jianguoyun.com');
-
-    // Try to create directory directly (skip PROPFIND to avoid CORS issues)
-    let directoryReady = false;
-
-    try {
-      console.log('Attempting to check/create directory:', dirUrl.toString());
-
-      // Try MKCOL first. If it fails with 405/409, the directory likely exists.
-      const mkcolResponse = await fetch(dirUrl.toString(), {
-        method: 'MKCOL',
-        headers: {
-          'Authorization': authHeader
-        },
-        mode: 'cors',
-        credentials: 'include'
-      });
-
-      console.log('MKCOL response:', {
-        status: mkcolResponse.status,
-        statusText: mkcolResponse.statusText,
-        url: dirUrl.toString()
-      });
-
-      // Check if directory creation succeeded or already exists
-      if (mkcolResponse.status >= 200 && mkcolResponse.status < 300) {
-        // Directory created successfully
-        directoryReady = true;
-        console.log('Directory created successfully');
-      } else if (mkcolResponse.status === 405 || mkcolResponse.status === 409) {
-        // Method Not Allowed or Conflict - directory likely already exists
-        directoryReady = true;
-        console.log('Directory already exists or creation not allowed (continuing)');
-      } else if (mkcolResponse.status === 401 || mkcolResponse.status === 403) {
-        // Authentication error
-        throw new Error(`身份验证失败(401/403)：请检查用户名和应用密码。坚果云用户必须使用“第三方应用密码”。`);
-      } else {
-        // Other error
-        throw new Error(`WebDAV 服务器返回错误：${mkcolResponse.status} ${mkcolResponse.statusText}`);
-      }
-    } catch (error) {
-      console.error('Directory operation failed:', error);
-
-      // 分析错误类型
-      let errorMsg = '未知错误';
-      const isBrowser = !((window as any).Capacitor && (window as any).Capacitor.isNative);
-
-      if (error instanceof Error) {
-        if (error.message === 'Failed to fetch') {
-          if (isBrowser) {
-            errorMsg = '网络连接失败或CORS跨域限制。在浏览器环境中，由于坚果云(Nutstore)等服务不支持CORS，同步通常会失败。请在Android/iOS真机上测试，或确保服务器支持CORS。';
-          } else {
-            errorMsg = '网络连接失败、服务器地址不正确或服务器未响应。';
-          }
-        } else {
-          errorMsg = error.message;
-        }
-      }
-
-      // 提供更具体的错误信息
-      let detailedErrorMsg = '\n\n可能的原因：\n1. WebDAV服务器地址不正确（需包含https://和路径）\n2. 网络连接问题\n3. 坚果云用户未使用“第三方应用密码”\n4. 浏览器环境下的CORS限制（最常见原因）';
-
-      if (isNutstore) {
-        detailedErrorMsg += '\n\n【坚果云(Nutstore)用户特别提示】：\n1. 必须使用“第三方应用密码”，在坚果云官网设置->安全中生成。\n2. 地址必须包含 /dav/，例如：https://dav.jianguoyun.com/dav/';
-      }
-
-      throw new Error(`${errorMsg}${detailedErrorMsg}`);
-    }
-
-    // Ensure we have a valid directory before proceeding
-    if (!directoryReady) {
-      throw new Error('无法确认目录存在或创建目录');
-    }
-
-    // Sync each note as a separate markdown file
-    let uploadCount = 0;
-    let failedCount = 0;
-
-    for (const note of notes) {
-      const noteFileName = `${note.id}.md`;
-      const noteUrl = new URL(noteFileName, dirUrl);
-
-      // Create markdown content
-      const markdownContent = `# ${note.title || 'Untitled Note'}\n\n${note.content}`;
-
-      console.log(`Uploading note: ${note.title || 'Untitled Note'}`);
-
-      // Upload the note to WebDAV
-      try {
-        const response = await fetch(noteUrl.toString(), {
-          method: 'PUT',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'text/markdown'
-          },
-          body: markdownContent,
-          mode: 'cors',
-          credentials: 'include'
-        });
-
-        console.log('Note upload response:', {
-          status: response.status,
-          statusText: response.statusText,
-          noteTitle: note.title,
-          url: noteUrl.toString()
-        });
-
-        if (!response.ok) {
-          failedCount++;
-          // If we get authentication errors, this is critical
-          if (response.status === 401 || response.status === 403) {
-            throw new Error(`身份验证失败：${response.status} ${response.statusText}`);
-          }
-          console.error(`Failed to upload note ${note.title || note.id}: ${response.status} ${response.statusText}`);
-        } else {
-          uploadCount++;
-          console.log('Note upload successful:', note.title || 'Untitled Note');
-        }
-      } catch (error) {
-        failedCount++;
-        console.error('Note upload error:', error);
-
-        // 分析上传错误类型
-        let uploadErrorMsg = '未知错误';
-        if (error instanceof Error) {
-          if (error.message === 'Failed to fetch') {
-            uploadErrorMsg = '网络连接失败或服务器地址不正确';
-          } else if (error.message.includes('CORS')) {
-            uploadErrorMsg = '跨域资源共享(CORS)配置问题';
-          } else {
-            uploadErrorMsg = error.message;
-          }
-        }
-
-        // If it's an authentication error, stop the whole process
-        if (error instanceof Error && (error.message.includes('401') || error.message.includes('403'))) {
-          throw new Error(`身份验证失败：${uploadErrorMsg}`);
-        }
-
-        // 如果是网络连接问题，且这是第一个失败的笔记，也停止同步
-        if (error instanceof Error && error.message === 'Failed to fetch' && failedCount === 1) {
-          throw new Error(`笔记上传失败：${uploadErrorMsg}\n可能的原因：网络连接问题、服务器地址不正确或WebDAV服务器未响应`);
-        }
-      }
-    }
-
-    console.log('Note upload summary:', {
-      totalNotes: notes.length,
-      uploaded: uploadCount,
-      failed: failedCount
-    });
-
-    // If all notes failed to upload, this is a critical error
-    if (failedCount === notes.length) {
-      throw new Error('所有笔记上传失败，请检查WebDAV配置和网络连接');
-    }
-
-    // Also upload a notes.json file with all note metadata
-    const notesJsonUrl = new URL('notes.json', dirUrl);
-    const notesMetadata = notes.map(note => ({
-      id: note.id,
-      title: note.title,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-      tags: note.tags,
-      notebookId: note.notebookId
-    }));
-
-    const notesJsonContent = JSON.stringify(notesMetadata, null, 2);
-
-    console.log('Uploading notes metadata...');
-
-    try {
-      const notesJsonResponse = await fetch(notesJsonUrl.toString(), {
-        method: 'PUT',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json'
-        },
-        body: notesJsonContent,
-        mode: 'cors',
-        credentials: 'include'
-      });
-
-      console.log('Notes metadata upload response:', {
-        status: notesJsonResponse.status,
-        statusText: notesJsonResponse.statusText
-      });
-
-      if (!notesJsonResponse.ok) {
-        // Metadata upload failure is important but not fatal
-        console.error(`Failed to upload notes metadata: ${notesJsonResponse.status} ${notesJsonResponse.statusText}`);
-        // We'll continue but log this as a warning
-      } else {
-        console.log('Notes metadata upload successful');
-      }
-    } catch (error) {
-      console.error('Notes metadata upload error:', error);
-      // This is not fatal, continue with sync completion
-    }
-
-    // Final check: ensure at least some notes were uploaded
-    if (uploadCount === 0 && notes.length > 0) {
-      throw new Error('未上传任何笔记，请检查WebDAV服务器配置和网络连接');
-    }
-
-    console.log('WebDAV sync process completed successfully');
-    console.log(`同步结果：共 ${notes.length} 个笔记，成功上传 ${uploadCount} 个，失败 ${failedCount} 个`);
-  };
 
   const handleManualSync = async () => {
     if (!webdavEnabled || !syncUrl || !syncUsername || !syncPassword) {
@@ -1564,24 +1546,55 @@ const App: React.FC = () => {
     );
   };
 
-  // Settings Modal Component - Lazy loaded for performance
-  const SettingsModal = React.memo(() => {
-    const handleSaveSettings = () => {
+  // Settings Modal Component
+  const SettingsModal = () => {
+    // 修复输入框失去焦点问题：使用局部变量保存初始值，避免直接依赖App状态
+    const initialLanguage = language;
+    const initialWebdavEnabled = webdavEnabled;
+    const initialSyncUrl = syncUrl;
+    const initialSyncUsername = syncUsername;
+    const initialSyncPassword = syncPassword;
+    const initialSyncFolder = syncFolder;
+    const initialAutoSyncEnabled = autoSyncEnabled;
+    const initialDeviceName = deviceName;
+
+    // 使用本地状态管理，避免直接依赖App组件状态导致的重新渲染
+    const [localLanguage, setLocalLanguage] = useState(initialLanguage);
+    const [localWebdavEnabled, setLocalWebdavEnabled] = useState(initialWebdavEnabled);
+    const [localSyncUrl, setLocalSyncUrl] = useState(initialSyncUrl);
+    const [localSyncUsername, setLocalSyncUsername] = useState(initialSyncUsername);
+    const [localSyncPassword, setLocalSyncPassword] = useState(initialSyncPassword);
+    const [localSyncFolder, setLocalSyncFolder] = useState(initialSyncFolder);
+    const [localAutoSyncEnabled, setLocalAutoSyncEnabled] = useState(initialAutoSyncEnabled);
+    const [localDeviceName, setLocalDeviceName] = useState(initialDeviceName);
+
+    const handleSaveSettings = (closeModal = true) => {
       // Save language settings
-      localStorage.setItem('zenote_language', language);
+      localStorage.setItem('zenote_language', localLanguage);
+      setLanguage(localLanguage);
 
       // Save sync settings
-      localStorage.setItem('zenote_sync_enabled', webdavEnabled.toString());
-      localStorage.setItem('zenote_sync_url', syncUrl);
-      localStorage.setItem('zenote_sync_username', syncUsername);
-      localStorage.setItem('zenote_sync_password', syncPassword);
+      localStorage.setItem('zenote_sync_enabled', localWebdavEnabled.toString());
+      setWebdavEnabled(localWebdavEnabled);
+      localStorage.setItem('zenote_sync_url', localSyncUrl);
+      setSyncUrl(localSyncUrl);
+      localStorage.setItem('zenote_sync_username', localSyncUsername);
+      setSyncUsername(localSyncUsername);
+      localStorage.setItem('zenote_sync_password', localSyncPassword);
+      setSyncPassword(localSyncPassword);
+      localStorage.setItem('zenote_sync_folder', localSyncFolder);
+      setSyncFolder(localSyncFolder);
+      localStorage.setItem('zenote_auto_sync', localAutoSyncEnabled.toString());
+      setAutoSyncEnabled(localAutoSyncEnabled);
+      localStorage.setItem('zenote_device_name', localDeviceName);
+      setDeviceName(localDeviceName);
 
-      // Additional settings can be saved here
-
-      setShowSettings(false);
+      if (closeModal) {
+        setShowSettings(false);
+      }
     };
 
-    return (
+      return (
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
@@ -1635,8 +1648,8 @@ const App: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">{t('language')}</label>
                   <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
+                    value={localLanguage}
+                    onChange={(e) => setLocalLanguage(e.target.value)}
                     className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
                   >
                     <option value="zh-CN">{t('zh-CN')}</option>
@@ -1652,84 +1665,119 @@ const App: React.FC = () => {
 
 
                 {/* WebDAV Sync Settings */}
-                <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('webdavSync')}</h3>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-1">{t('syncNotes')}</p>
-                    </div>
-                    <div className="relative inline-block w-12 h-6">
-                      <input
-                        type="checkbox"
-                        id="webdav-toggle"
-                        checked={webdavEnabled}
-                        onChange={(e) => setWebdavEnabled(e.target.checked)}
-                        className="sr-only"
-                      />
-                      <label
-                        htmlFor="webdav-toggle"
-                        className={`absolute inset-0 rounded-full transition-colors cursor-pointer ${webdavEnabled ? 'bg-accent-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
-                      >
-                        <span
-                          className={`absolute top-0.5 left-0.5 bg-white rounded-full w-5 h-5 transition-transform ${webdavEnabled ? 'transform translate-x-6' : ''}`}
-                        ></span>
-                      </label>
+                <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-zinc-600 dark:text-zinc-400">{t('webdavSync')}</span>
+                        <div className="relative inline-block w-12 h-6">
+                          <input
+                            type="checkbox"
+                            id="webdav-toggle"
+                            checked={localWebdavEnabled}
+                            onChange={(e) => setLocalWebdavEnabled(e.target.checked)}
+                            className="sr-only"
+                          />
+                          <label
+                            htmlFor="webdav-toggle"
+                            className={`absolute inset-0 rounded-full transition-colors cursor-pointer ${localWebdavEnabled ? 'bg-accent-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 bg-white rounded-full w-5 h-5 transition-transform ${localWebdavEnabled ? 'transform translate-x-6' : ''}`}
+                            ></span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-zinc-600 dark:text-zinc-400">自动同步</span>
+                        <div className="relative inline-block w-12 h-6">
+                          <input
+                            type="checkbox"
+                            id="auto-sync-toggle"
+                            checked={localAutoSyncEnabled}
+                            onChange={(e) => setLocalAutoSyncEnabled(e.target.checked)}
+                            className="sr-only"
+                          />
+                          <label
+                            htmlFor="auto-sync-toggle"
+                            className={`absolute inset-0 rounded-full transition-colors cursor-pointer ${localAutoSyncEnabled ? 'bg-accent-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 bg-white rounded-full w-5 h-5 transition-transform ${localAutoSyncEnabled ? 'transform translate-x-6' : ''}`}
+                            ></span>
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">{t('serverUrl')}</label>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{t('serverUrl')}</label>
                       <input
                         type="text"
-                        value={syncUrl}
-                        onChange={(e) => setSyncUrl(e.target.value)}
+                        value={localSyncUrl}
+                        onChange={(e) => setLocalSyncUrl(e.target.value)}
                         placeholder="https://dav.jianguoyun.com/dav/"
-                        disabled={!webdavEnabled}
-                        className={`w-full px-4 py-3 border ${webdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!webdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      />
-                      {syncUrl.includes('jianguoyun.com') && (
-                        <p className="text-[10px] text-accent-600 mt-1 italic">提醒：坚果云地址结尾需包含 /dav/，且必须使用“第三方应用密码”</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">{t('username')}</label>
-                      <input
-                        type="text"
-                        value={syncUsername}
-                        onChange={(e) => setSyncUsername(e.target.value)}
-                        disabled={!webdavEnabled}
-                        className={`w-full px-4 py-3 border ${webdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!webdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={!localWebdavEnabled}
+                        className={`w-full px-3 py-2 border ${localWebdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!localWebdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">{t('password')}</label>
-                      <input
-                        type="password"
-                        value={syncPassword}
-                        onChange={(e) => setSyncPassword(e.target.value)}
-                        disabled={!webdavEnabled}
-                        className={`w-full px-4 py-3 border ${webdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!webdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{t('username')}</label>
+                        <input
+                          type="text"
+                          value={localSyncUsername}
+                          onChange={(e) => setLocalSyncUsername(e.target.value)}
+                          disabled={!localWebdavEnabled}
+                          className={`w-full px-3 py-2 border ${localWebdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!localWebdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{t('password')}</label>
+                        <input
+                          type="password"
+                          value={localSyncPassword}
+                          onChange={(e) => setLocalSyncPassword(e.target.value)}
+                          disabled={!localWebdavEnabled}
+                          className={`w-full px-3 py-2 border ${localWebdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!localWebdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">同步文件夹</label>
+                        <input
+                          type="text"
+                          value={localSyncFolder}
+                          onChange={(e) => setLocalSyncFolder(e.target.value)}
+                          disabled={!localWebdavEnabled}
+                          placeholder="zenote-notes/"
+                          className={`w-full px-3 py-2 border ${localWebdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!localWebdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">设备名</label>
+                        <input
+                          type="text"
+                          value={localDeviceName}
+                          onChange={(e) => setLocalDeviceName(e.target.value)}
+                          disabled={!localWebdavEnabled}
+                          placeholder="输入设备名，用于同步文件名前缀"
+                          className={`w-full px-3 py-2 border ${localWebdavEnabled ? 'border-zinc-300 dark:border-zinc-700' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${!localWebdavEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+                    </div>
+
+
                   </div>
 
-                  <button
-                    onClick={handleManualSync}
-                    disabled={!webdavEnabled || syncInProgress || !syncUrl || !syncUsername || !syncPassword}
-                    className={`w-full mt-4 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${!webdavEnabled || !syncUrl || !syncUsername || !syncPassword ? 'bg-zinc-300 dark:bg-zinc-600 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' : syncInProgress ? 'bg-accent-400 dark:bg-accent-700 text-white' : 'bg-accent-600 hover:bg-accent-700 dark:bg-accent-600 dark:hover:bg-accent-700 text-white'}`}
-                  >
-                    {syncInProgress ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                        {t('syncing')}
-                      </>
-                    ) : (
-                      t('syncNow')
-                    )}
-                  </button>
+
                 </div>
 
                 {syncStatus && (
@@ -1746,10 +1794,30 @@ const App: React.FC = () => {
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+          <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
             <button
-              onClick={handleSaveSettings}
-              className="px-8 py-3 bg-accent-600 hover:bg-accent-600 text-white font-medium rounded-lg transition-colors shadow-md"
+              onClick={() => {
+                // Before manual sync, make sure to save current local settings to App state
+                // Don't close modal so user can see sync result
+                handleSaveSettings(false);
+                // Then perform manual sync
+                handleManualSync();
+              }}
+              disabled={!localWebdavEnabled || syncInProgress || !localSyncUrl || !localSyncUsername || !localSyncPassword}
+              className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${!localWebdavEnabled || !localSyncUrl || !localSyncUsername || !localSyncPassword ? 'bg-zinc-300 dark:bg-zinc-600 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' : syncInProgress ? 'bg-accent-400 dark:bg-accent-700 text-white' : 'bg-accent-600 hover:bg-accent-700 dark:bg-accent-600 dark:hover:bg-accent-700 text-white'}`}
+            >
+              {syncInProgress ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                  {t('syncing')}
+                </>
+              ) : (
+                t('syncNow')
+              )}
+            </button>
+            <button
+              onClick={() => handleSaveSettings()}
+              className="px-6 py-2 bg-accent-600 hover:bg-accent-600 text-white font-medium rounded-lg transition-colors shadow-md"
             >
               {t('save')}
             </button>
@@ -1757,7 +1825,7 @@ const App: React.FC = () => {
         </div>
       </div>
     );
-  }); // Close the React.memo
+  };
 
   return (
     <div className="flex h-screen pt-safe pb-safe bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
@@ -1807,11 +1875,7 @@ const App: React.FC = () => {
       <Dialog />
 
       {/* Settings Modal */}
-      {showSettings && (
-        <React.Suspense fallback={<LoadingComponent />}>
-          <SettingsModal />
-        </React.Suspense>
-      )}
+      {showSettings && <SettingsModal />}
     </div>
   );
 };
