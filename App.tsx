@@ -557,8 +557,17 @@ const App: React.FC = () => {
     // Determine if we're in local development environment
     const isLocalDev = isBrowser && (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'));
     
-    // Use proxy for Nutstore in local development environment
-    // Use full URL in production/GitHub Pages environment
+    // Log environment information for debugging
+    console.log('WebDAV Environment Debug:', {
+      isBrowser: isBrowser,
+      origin: isBrowser ? window.location.origin : 'Not in browser',
+      isLocalDev: isLocalDev,
+      isNutstore: isNutstore,
+      originalUrl: url
+    });
+    
+    // Use proxy for Nutstore in local development environment only
+    // Always use full URL in production environment (Vercel/GitHub Pages)
     let clientUrl = url;
     if (isBrowser && isNutstore && isLocalDev) {
       // Replace Nutstore URL with local proxy URL when in local development
@@ -566,6 +575,10 @@ const App: React.FC = () => {
       // Extract pathname (including /dav/) for proxy
       clientUrl = urlObj.pathname;
       console.log('Using local proxy URL for Nutstore:', clientUrl);
+    } else {
+      // For production environment, always use full URL
+      clientUrl = url;
+      console.log('Using full URL for production environment:', clientUrl);
     }
     
     // Additional URL validation for Nutstore
