@@ -566,19 +566,15 @@ const App: React.FC = () => {
       originalUrl: url
     });
     
-    // Use proxy for Nutstore in local development environment only
-    // Always use full URL in production environment (Vercel/GitHub Pages)
+    // Use proxy path for Nutstore in both local development and production environment
+    // This ensures consistency between local and Vercel/GitHub Pages environments
     let clientUrl = url;
-    if (isBrowser && isNutstore && isLocalDev) {
-      // Replace Nutstore URL with local proxy URL when in local development
+    if (isBrowser && isNutstore) {
+      // Replace Nutstore URL with proxy URL path (including /dav/) for both environments
       const urlObj = new URL(url);
       // Extract pathname (including /dav/) for proxy
       clientUrl = urlObj.pathname;
-      console.log('Using local proxy URL for Nutstore:', clientUrl);
-    } else {
-      // For production environment, always use full URL
-      clientUrl = url;
-      console.log('Using full URL for production environment:', clientUrl);
+      console.log('Using proxy URL for Nutstore:', clientUrl, 'in', isLocalDev ? 'local' : 'production', 'environment');
     }
     
     // Additional URL validation for Nutstore
