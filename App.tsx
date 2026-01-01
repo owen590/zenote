@@ -1815,32 +1815,36 @@ const App: React.FC = () => {
 
           {/* Footer */}
           <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
-            <button
-              onClick={() => {
-                // Before manual sync, make sure to save current local settings to App state
-                // Don't close modal so user can see sync result
-                handleSaveSettings(false);
-                // Then perform manual sync
-                handleManualSync();
-              }}
-              disabled={!localWebdavEnabled || syncInProgress || !localSyncUrl || !localSyncUsername || !localSyncPassword}
-              className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${!localWebdavEnabled || !localSyncUrl || !localSyncUsername || !localSyncPassword ? 'bg-zinc-300 dark:bg-zinc-600 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' : syncInProgress ? 'bg-accent-400 dark:bg-accent-700 text-white' : 'bg-accent-600 hover:bg-accent-700 dark:bg-accent-600 dark:hover:bg-accent-700 text-white'}`}
-            >
-              {syncInProgress ? (
-                <>
-                  <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
-                  {t('syncing')}
-                </>
-              ) : (
-                t('syncNow')
-              )}
-            </button>
-            <button
-              onClick={() => handleSaveSettings()}
-              className="px-6 py-2 bg-accent-600 hover:bg-accent-600 text-white font-medium rounded-lg transition-colors shadow-md"
-            >
-              {t('save')}
-            </button>
+            {activeSettingsTab === 'sync' && (
+              <>
+                <button
+                  onClick={() => {
+                    // Before manual sync, make sure to save current local settings to App state
+                    // Don't close modal so user can see sync result
+                    handleSaveSettings(false);
+                    // Then perform manual sync
+                    handleManualSync();
+                  }}
+                  disabled={!localWebdavEnabled || syncInProgress || !localSyncUrl || !localSyncUsername || !localSyncPassword}
+                  className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${!localWebdavEnabled || !localSyncUrl || !localSyncUsername || !localSyncPassword ? 'bg-zinc-300 dark:bg-zinc-600 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' : syncInProgress ? 'bg-accent-400 dark:bg-accent-700 text-white' : 'bg-accent-600 hover:bg-accent-700 dark:bg-accent-600 dark:hover:bg-accent-700 text-white'}`}
+                >
+                  {syncInProgress ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                      {t('syncing')}
+                    </>
+                  ) : (
+                    t('syncNow')
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSaveSettings()}
+                  className="px-6 py-2 bg-accent-600 hover:bg-accent-600 text-white font-medium rounded-lg transition-colors shadow-md"
+                >
+                  {t('save')}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
