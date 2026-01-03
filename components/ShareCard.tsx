@@ -21,7 +21,7 @@ interface ShareCardProps {
   fontSize?: number;
 }
 
-type AspectRatio = '1:1' | '3:4' | '4:3';
+type AspectRatio = 'Full' | '3:4';
 
 interface ThemeConfig {
   id: string;
@@ -35,7 +35,7 @@ interface ThemeConfig {
 
 
 // Helper to paginate markdown text roughly
-const paginateContent = (text: string, maxWeight: number = 1000): string[] => {
+const paginateContent = (text: string, maxWeight: number = 1000, aspectRatio: AspectRatio): string[] => {
   if (!text) return [''];
   
   const lines = text.split('\n');
@@ -43,17 +43,45 @@ const paginateContent = (text: string, maxWeight: number = 1000): string[] => {
   let currentPage = '';
   let currentWeight = 0;
 
+  // Adjust weight factors based on aspect ratio
+  const header1Weight = aspectRatio === '3:4' ? 180 : 150;
+  const header2Weight = aspectRatio === '3:4' ? 150 : 120;
+  const header3Weight = aspectRatio === '3:4' ? 130 : 100;
+  const emptyLineWeight = aspectRatio === '3:4' ? 60 : 50;
+  const listItemWeight = aspectRatio === '3:4' ? 40 : 30;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     // Heuristic: Headers take more vertical space
     let weight = line.length;
-    if (line.startsWith('# ')) weight = 150;
-    else if (line.startsWith('## ')) weight = 120;
-    else if (line.startsWith('### ')) weight = 100;
-    else if (line.trim() === '') weight = 50;
-    else if (line.startsWith('- ') || line.startsWith('1. ')) weight += 30;
+    if (line.startsWith('# ')) weight = header1Weight;
+    else if (line.startsWith('## ')) weight = header2Weight;
+    else if (line.startsWith('### ')) weight = header3Weight;
+    else if (line.trim() === '') weight = emptyLineWeight;
+    else if (line.startsWith('- ') || line.startsWith('1. ')) weight += listItemWeight;
 
     if (currentWeight + weight > maxWeight && currentPage.trim().length > 0) {
+      // Try to avoid breaking in the middle of a paragraph
+      if (i > 0 && !lines[i-1].trim().endsWith('.') && !lines[i-1].trim().endsWith('!') && !lines[i-1].trim().endsWith('?') && !lines[i-1].trim() === '') {
+        // Find the last sentence ending
+        let lastSentenceIndex = currentPage.lastIndexOf('.\n');
+        if (lastSentenceIndex === -1) lastSentenceIndex = currentPage.lastIndexOf('!\n');
+        if (lastSentenceIndex === -1) lastSentenceIndex = currentPage.lastIndexOf('?\n');
+        if (lastSentenceIndex === -1) lastSentenceIndex = currentPage.lastIndexOf('\n\n');
+        
+        if (lastSentenceIndex !== -1) {
+          // Split at the last sentence boundary
+          const pageContent = currentPage.substring(0, lastSentenceIndex + 2);
+          pages.push(pageContent);
+          
+          // Start next page with the remaining content
+          const remainingContent = currentPage.substring(lastSentenceIndex + 2) + line + '\n';
+          currentPage = remainingContent;
+          currentWeight = weight; // Recalculate weight for remaining content
+          continue;
+        }
+      }
+      
       pages.push(currentPage);
       currentPage = line + '\n';
       currentWeight = weight;
@@ -74,7 +102,8 @@ const CardContent = ({
   theme, 
   dateStr, 
   tags,
-  fontSize
+  fontSize,
+  aspectRatio
 }: { 
   content: string, 
   pageNum: number, 
@@ -82,7 +111,8 @@ const CardContent = ({
   theme: ThemeConfig, 
   dateStr: string,
   tags: string[],
-  fontSize?: number
+  fontSize?: number,
+  aspectRatio: AspectRatio
 }) => (
   <div className={`relative w-full h-full flex flex-col justify-between p-10 ${theme.className}`}>
     <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
@@ -93,6 +123,7 @@ const CardContent = ({
       {/* 
          Font: prose-sm (14px) - Optimized for mobile reading
          Leading: leading-loose (2.0) - High spacing for Zen aesthetic (~12 lines per page)
+         Buffer: Added extra bottom margin for 3:4 format to prevent text truncation
       */}
       <div 
         className={`prose prose-sm max-w-none flex-1
@@ -109,9 +140,14 @@ const CardContent = ({
           marker:text-current/50
           [&>:first-child]:mt-0
           leading-loose
+          ${aspectRatio === '3:4' ? 'prose-p:mb-4 prose-headings:mb-4 prose-ul:mb-4 prose-ol:mb-4 prose-blockquote:mb-4' : ''}
           ${theme.proseClass || ''}
         `}
-        style={fontSize ? { fontSize: `${fontSize}px` } : {}}
+        style={{
+          fontSize: fontSize ? `${fontSize}px` : undefined,
+          // Keep line height closer to original for better content density
+          lineHeight: aspectRatio === '3:4' ? '2.1' : '2.0'
+        }}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {content}
@@ -127,7 +163,7 @@ const CardContent = ({
       
       <div className="flex items-center gap-3">
         {totalPages > 1 && (
-          <span className="text-xs font-mono opacity-50">Page {pageNum} / {totalPages}</span>
+          <span className="text-xs font-mono opacity-50 whitespace-nowrap">Page {pageNum} / {totalPages}</span>
         )}
         <div className="flex gap-2">
           {tags.map(t => (
@@ -140,7 +176,7 @@ const CardContent = ({
 );
 
 const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => {
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('Full');
   const [selectedThemeId, setSelectedThemeId] = useState<string>('light');
   const [downloading, setDownloading] = useState(false);
   
@@ -236,13 +272,24 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
 
   useEffect(() => {
     // Determine char limit based on aspect ratio
-    // TUNED for ~12 lines of text per page with 'leading-loose' and prose-sm font size
+    // TUNED for ~14-15 lines of text per page with 'leading-loose' and prose-sm font size
     let limit = 500;
-    if (aspectRatio === '3:4') limit = 850; // ~12 lines with smaller font
-    if (aspectRatio === '1:1') limit = 500;
-    if (aspectRatio === '4:3') limit = 400;
+    if (aspectRatio === '3:4') limit = 950; // Increased limit to reduce bottom whitespace
+    if (aspectRatio === 'Full') {
+      // No pagination for Full format - use a very large limit to ensure single page
+      limit = 100000;
+    }
 
-    const paginated = paginateContent(note.content, limit);
+    let paginated = paginateContent(note.content, limit, aspectRatio);
+    
+    // Remove last page if it's completely blank in 3:4 format
+    if (aspectRatio === '3:4' && paginated.length > 1) {
+      const lastPage = paginated[paginated.length - 1];
+      if (lastPage.trim().length === 0) {
+        paginated = paginated.slice(0, -1);
+      }
+    }
+    
     // Ensure at least one page
     setPages(paginated.length > 0 ? paginated : [note.content || '']);
     setCurrentPageIndex(0);
@@ -250,9 +297,8 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
 
   const getDimensions = () => {
     switch (aspectRatio) {
-      case '1:1': return 'aspect-square';
+      case 'Full': return ''; // No fixed aspect ratio for Full format
       case '3:4': return 'aspect-[3/4]';
-      case '4:3': return 'aspect-[4/3]';
       default: return 'aspect-[3/4]';
     }
   };
@@ -287,7 +333,7 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
           
           const link = document.createElement('a');
           const suffix = pages.length > 1 ? `-${i+1}` : '';
-          link.download = `zenote_${note.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'note'}${suffix}.png`;
+          link.download = `zenote${suffix}.png`;
           link.href = dataUrl;
           // Use a more reliable download method for production
           document.body.appendChild(link);
@@ -325,7 +371,7 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
             
             const link = document.createElement('a');
             const suffix = pages.length > 1 ? `-${i+1}` : '';
-            link.download = `zenote_${note.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'note'}${suffix}.png`;
+            link.download = `zenote${suffix}.png`;
             link.href = dataUrl;
             document.body.appendChild(link);
             link.click();
@@ -373,7 +419,8 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
             // We force a width here for the export image quality
             className={`w-[600px] ${theme.className} relative flex flex-col`}
             style={{ 
-              aspectRatio: aspectRatio.replace(':', '/'),
+              aspectRatio: aspectRatio === 'Full' ? undefined : aspectRatio.replace(':', '/'),
+              minHeight: aspectRatio === 'Full' ? '100%' : undefined
             }}
           >
             <CardContent 
@@ -384,6 +431,7 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
               dateStr={currentDate}
               tags={note.tags}
               fontSize={fontSize}
+              aspectRatio={aspectRatio}
             />
           </div>
         ))}
@@ -410,6 +458,7 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
                 dateStr={currentDate}
                 tags={note.tags}
                 fontSize={fontSize}
+                aspectRatio={aspectRatio}
               />
             )}
           </div>
@@ -456,8 +505,8 @@ const ShareCard: React.FC<ShareCardProps> = ({ note, onClose, t, fontSize }) => 
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('format')}</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(['1:1', '3:4', '4:3'] as AspectRatio[]).map(ratio => (
+              <div className="grid grid-cols-2 gap-2">
+                {(['Full', '3:4'] as AspectRatio[]).map(ratio => (
                   <button
                     key={ratio}
                     onClick={() => setAspectRatio(ratio)}
