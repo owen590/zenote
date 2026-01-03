@@ -62,7 +62,7 @@ const paginateContent = (text: string, maxWeight: number = 1000, aspectRatio: As
 
     if (currentWeight + weight > maxWeight && currentPage.trim().length > 0) {
       // Try to avoid breaking in the middle of a paragraph
-      if (i > 0 && !lines[i-1].trim().endsWith('.') && !lines[i-1].trim().endsWith('!') && !lines[i-1].trim().endsWith('?') && !lines[i-1].trim() === '') {
+      if (i > 0 && !lines[i-1].trim().endsWith('.') && !lines[i-1].trim().endsWith('!') && !lines[i-1].trim().endsWith('?') && lines[i-1].trim() !== '') {
         // Find the last sentence ending
         let lastSentenceIndex = currentPage.lastIndexOf('.\n');
         if (lastSentenceIndex === -1) lastSentenceIndex = currentPage.lastIndexOf('!\n');
