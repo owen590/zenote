@@ -263,7 +263,10 @@ const App: React.FC = () => {
       'syncError': '同步失败',
       'apiKeySavedSuccess': 'API 密钥保存成功！',
       'apiKeyRemovedSuccess': 'API 密钥已移除！',
-      'apiKeyCleared': 'API 密钥已清除！'
+      'apiKeyCleared': 'API 密钥已清除！',
+      'autoSync': '自动同步',
+      'syncFolder': '同步文件夹',
+      'deviceName': '设备名'
     },
     'en-US': {
       'language': 'Language',
@@ -358,7 +361,10 @@ const App: React.FC = () => {
       'syncError': 'Sync failed',
       'apiKeySavedSuccess': 'API key saved successfully!',
       'apiKeyRemovedSuccess': 'API key removed successfully!',
-      'apiKeyCleared': 'API key cleared!'
+      'apiKeyCleared': 'API key cleared!',
+      'autoSync': 'Auto Sync',
+      'syncFolder': 'Sync Folder',
+      'deviceName': 'Device Name'
     },
     'ja-JP': {
       'language': '言語',
@@ -453,7 +459,10 @@ const App: React.FC = () => {
       'syncError': '同期失敗',
       'apiKeySavedSuccess': 'API キーが正常に保存されました！',
       'apiKeyRemovedSuccess': 'API キーが正常に削除されました！',
-      'apiKeyCleared': 'API キーが正常にクリアされました！'
+      'apiKeyCleared': 'API キーが正常にクリアされました！',
+      'autoSync': '自動同期',
+      'syncFolder': '同期フォルダ',
+      'deviceName': 'デバイス名'
     }
   }), []);
 
@@ -943,6 +952,51 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle Tag Action (Rename or Delete)
+  const handleTagAction = (tag: string) => {
+    // Create a dialog to ask user if they want to rename or delete the tag
+    const action = window.confirm(`选择操作：\n1. 点击"确定"重命名标签"${tag}"\n2. 点击"取消"删除标签"${tag}"`);
+    
+    if (action) {
+      // Rename tag
+      const newTagName = window.prompt(`请输入新的标签名：`, tag);
+      if (newTagName && newTagName.trim() && newTagName !== tag) {
+        // Update all notes that have this tag
+        setNotes(prevNotes => prevNotes.map(note => {
+          if (note.tags.includes(tag)) {
+            return {
+              ...note,
+              tags: note.tags.map(t => t === tag ? newTagName.trim() : t)
+            };
+          }
+          return note;
+        }));
+        
+        // Update active tag if it was the one being renamed
+        if (activeTagId === tag) {
+          setActiveTagId(newTagName.trim());
+        }
+      }
+    } else {
+      // Delete tag
+      const confirmDelete = window.confirm(`确定要删除标签"${tag}"吗？\n这将从所有笔记中移除该标签。`);
+      if (confirmDelete) {
+        // Update all notes to remove this tag
+        setNotes(prevNotes => prevNotes.map(note => {
+          return {
+            ...note,
+            tags: note.tags.filter(t => t !== tag)
+          };
+        }));
+        
+        // Update active tag if it was the one being deleted
+        if (activeTagId === tag) {
+          setActiveTagId(null);
+        }
+      }
+    }
+  };
+
   const handleSelectNote = (id: string) => {
     setActiveNoteId(id);
     setMobileView(ViewMode.EDIT);
@@ -1096,6 +1150,20 @@ const App: React.FC = () => {
                   }
                   // 关闭侧边栏（移动端）
                   setSidebarOpen(false);
+                }}
+                onMouseDown={(e) => {
+                  const timer = setTimeout(() => {
+                    handleTagAction(tag);
+                  }, 500);
+                  e.currentTarget.onmouseup = () => clearTimeout(timer);
+                  e.currentTarget.onmouseleave = () => clearTimeout(timer);
+                }}
+                onTouchStart={(e) => {
+                  const timer = setTimeout(() => {
+                    handleTagAction(tag);
+                  }, 500);
+                  e.currentTarget.ontouchend = () => clearTimeout(timer);
+                  e.currentTarget.ontouchcancel = () => clearTimeout(timer);
                 }}
               >
                 <Hash size={10} />
@@ -1709,7 +1777,7 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-zinc-600 dark:text-zinc-400">自动同步</span>
+                        <span className="text-sm text-zinc-600 dark:text-zinc-400">{t('autoSync')}</span>
                         <div className="relative inline-block w-12 h-6">
                           <input
                             type="checkbox"
@@ -1770,7 +1838,7 @@ const App: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">同步文件夹</label>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{t('syncFolder')}</label>
                         <input
                           type="text"
                           value={localSyncFolder}
@@ -1782,7 +1850,7 @@ const App: React.FC = () => {
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">设备名</label>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">{t('deviceName')}</label>
                         <input
                           type="text"
                           value={localDeviceName}
