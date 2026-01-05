@@ -2,7 +2,14 @@ import React, { useState, useCallback } from 'react';
 import LandingPage from './LandingPage';
 
 const Root: React.FC = () => {
-  const [view, setView] = useState<'landing' | 'app'>('landing');
+  const [view, setView] = useState<'landing' | 'app'>(() => {
+    const saved = localStorage.getItem('zenote_view');
+    if (saved === 'app') {
+      localStorage.removeItem('zenote_view');
+      return 'landing';
+    }
+    return 'landing';
+  });
 
   const handleGoHome = useCallback(() => {
     setView('landing');
