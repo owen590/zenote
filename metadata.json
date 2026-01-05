@@ -1,0 +1,5 @@
+{
+  "name": "zenote",
+  "description": "A minimalist, aesthetically pleasing Markdown note-taking application featuring AI-powered summaries, WebDAV sync simulation, and social card generation.",
+  "requestFramePermissions": []
+}
