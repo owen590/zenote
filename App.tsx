@@ -42,7 +42,6 @@ const MOCK_NOTES: Note[] = [
   }
 ];
 
-const App: React.FC<{ onGoHome?: () => void }> = ({ onGoHome }) => {
   // --- State ---
   const [notes, setNotes] = useState<Note[]>(() => {
     try {
@@ -1089,6 +1088,7 @@ const App: React.FC<{ onGoHome?: () => void }> = ({ onGoHome }) => {
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col
     `}>
       <div className="h-16 flex items-center px-6 font-bold text-xl tracking-tight gap-2 text-zinc-800 dark:text-white">
+<<<<<<< HEAD
         <button
           onClick={onGoHome}
           className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold shadow-sm bg-accent-600 text-white hover:bg-accent-700 transition-colors"
@@ -1097,6 +1097,10 @@ const App: React.FC<{ onGoHome?: () => void }> = ({ onGoHome }) => {
           Z
         </button>
         <span>zenote</span>
+=======
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold shadow-sm bg-accent-600 text-white">Z</div>
+        zenote
+>>>>>>> d9281b1fc6c9a4c3a95768ac72edd079d6f6e859
       </div>
 
       <div className="p-4 flex-1 overflow-y-auto space-y-6">
