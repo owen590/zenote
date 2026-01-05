@@ -42,6 +42,7 @@ const MOCK_NOTES: Note[] = [
   }
 ];
 
+const App: React.FC = () => {
   // --- State ---
   const [notes, setNotes] = useState<Note[]>(() => {
     try {

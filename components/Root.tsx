@@ -28,7 +28,7 @@ const Root: React.FC = () => {
           </div>
         </div>
       }>
-        <App onGoHome={handleGoHome} />
+        <App />
       </React.Suspense>
     );
   }
