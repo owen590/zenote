@@ -153,6 +153,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
   const [currentSection, setCurrentSection] = useState(0);
   const sectionsRef = useRef<HTMLDivElement[]>([]);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+  const isScrolling = useRef<boolean>(false);
 
   useEffect(() => {
     const savedLang = localStorage.getItem('zenote_landing_language');
@@ -195,6 +198,46 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
     scrollToSection(sectionId);
   }, []);
 
+  // Touch event handlers for swipe navigation
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isScrolling.current = false;
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (isScrolling.current) return;
+
+    const touchCurrentX = e.touches[0].clientX;
+    const touchCurrentY = e.touches[0].clientY;
+    const diffX = Math.abs(touchCurrentX - touchStartX.current);
+    const diffY = Math.abs(touchCurrentY - touchStartY.current);
+
+    // If horizontal movement is greater than vertical, consider it as potential swipe
+    if (diffX > diffY && diffX > 30) {
+      isScrolling.current = true;
+
+      // Threshold for swipe detection
+      if (diffX > 80) {
+        if (touchCurrentX < touchStartX.current) {
+          // Swipe left - next section
+          setCurrentSection(prev => Math.min(prev + 1, 2));
+        } else {
+          // Swipe right - previous section
+          setCurrentSection(prev => Math.max(prev - 1, 0));
+        }
+        // Reset scrolling flag after swipe
+        setTimeout(() => {
+          isScrolling.current = false;
+        }, 500);
+      }
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    isScrolling.current = false;
+  }, []);
+
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (scrollTimeoutRef.current) return;
@@ -213,9 +256,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
       }
     };
 
+    // Add touch event listeners for swipe navigation
+    const container = document.getElementById('landing-container');
+    if (container) {
+      container.addEventListener('touchstart', handleTouchStart as unknown as EventListener, { passive: true });
+      container.addEventListener('touchmove', handleTouchMove as unknown as EventListener, { passive: true });
+      container.addEventListener('touchend', handleTouchEnd as unknown as EventListener, { passive: true });
+    }
+
     window.addEventListener('wheel', handleWheel);
-    return () => window.removeEventListener('wheel', handleWheel);
-  }, []);
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      if (container) {
+        container.removeEventListener('touchstart', handleTouchStart as unknown as EventListener);
+        container.removeEventListener('touchmove', handleTouchMove as unknown as EventListener);
+        container.removeEventListener('touchend', handleTouchEnd as unknown as EventListener);
+      }
+    };
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   useEffect(() => {
     const sections = ['hero', 'features', 'download'];
@@ -223,9 +282,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
   }, [currentSection, scrollToSectionByIndex]);
 
   return (
-    <div className={`min-h-screen ${isDark ? 'dark' : ''}`}>
+    <div id="landing-container" className={`min-h-screen touch-manipulation ${isDark ? 'dark' : ''}`}>
       <style>{`
-        html { scroll-behavior: smooth; }
+        html { scroll-behavior: smooth; touch-action: pan-y; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .gradient-text {
@@ -237,7 +296,45 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
         .gradient-bg {
           background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
         }
+        .touch-optimized {
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .section-indicator {
+          transition: all 0.3s ease;
+        }
+        @media (hover: none) and (pointer: coarse) {
+          button, a {
+            min-height: 44px;
+            min-width: 44px;
+          }
+        }
       `}</style>
+
+      {/* Section Indicator (visible on touch devices) */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex gap-2 section-indicator">
+        {[0, 1, 2].map((index) => (
+          <button
+            key={index}
+            onClick={() => setCurrentSection(index)}
+            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 touch-optimized ${
+              currentSection === index
+                ? 'bg-accent-600 w-8'
+                : 'bg-zinc-300 dark:bg-zinc-600 hover:bg-accent-400'
+            }`}
+            aria-label={`Go to section ${index + 1}`}
+          />
+        ))}
+      </div>
+
+      {/* Swipe Hint (visible on touch devices) */}
+      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 opacity-50 animate-bounce md:hidden">
+        <div className="flex items-center gap-2 text-xs text-zinc-400">
+          <span className="transform rotate-180">←</span>
+          <span>滑动切换</span>
+          <span>→</span>
+        </div>
+      </div>
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
@@ -359,11 +456,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button onClick={onGetApp} className="w-full sm:w-auto px-8 py-4 gradient-bg text-white rounded-xl font-semibold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-accent-500/25 flex items-center justify-center gap-2">
+            <button onClick={onGetApp} className="w-full sm:w-auto px-8 py-4 gradient-bg text-white rounded-xl font-semibold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-accent-500/25 flex items-center justify-center gap-2 touch-optimized active:scale-95">
               {t('hero.getStarted')}
               <ChevronRight size={20} />
             </button>
-            <button onClick={() => scrollToSection('features')} className="w-full sm:w-auto px-8 py-4 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl font-semibold text-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+            <button onClick={() => scrollToSection('features')} className="w-full sm:w-auto px-8 py-4 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl font-semibold text-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors touch-optimized active:scale-95">
               {t('hero.learnMore')}
             </button>
           </div>
@@ -406,7 +503,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature) => (
-              <div key={feature.key} className="group p-6 bg-zinc-50 dark:bg-zinc-900 rounded-2xl hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all duration-300 hover:shadow-lg hover:shadow-accent-500/10 border border-zinc-200 dark:border-zinc-800 hover:border-accent-200 dark:hover:border-accent-800">
+              <div key={feature.key} className="group p-6 bg-zinc-50 dark:bg-zinc-900 rounded-2xl hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all duration-300 hover:shadow-lg hover:shadow-accent-500/10 border border-zinc-200 dark:border-zinc-800 hover:border-accent-200 dark:hover:border-accent-800 touch-optimized active:scale-98">
                 <div className="text-4xl mb-4 transform group-hover:scale-110 transition-transform duration-300">
                   {feature.icon}
                 </div>
@@ -446,7 +543,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
               <p className="text-zinc-600 dark:text-zinc-400 mb-6">
                 {t('download.web.desc')}
               </p>
-              <button onClick={onGetApp} className="w-full py-3 bg-accent-600 hover:bg-accent-700 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2">
+              <button onClick={onGetApp} className="w-full py-3 bg-accent-600 hover:bg-accent-700 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 touch-optimized active:scale-95">
                 {t('hero.getStarted')}
                 <ChevronRight size={18} />
               </button>
@@ -463,7 +560,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
               <p className="text-zinc-600 dark:text-zinc-400 mb-6">
                 {t('download.android.desc')}
               </p>
-              <button className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2">
+              <button className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 touch-optimized active:scale-95">
                 <Download size={18} />
                 Google Play
               </button>
@@ -480,7 +577,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
               <p className="text-zinc-600 dark:text-zinc-400 mb-6">
                 {t('download.source.desc')}
               </p>
-              <a href="https://github.com/owen590/zenote" target="_blank" rel="noopener noreferrer" className="w-full py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 hover:opacity-90">
+              <a href="https://github.com/owen590/zenote" target="_blank" rel="noopener noreferrer" className="w-full py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 hover:opacity-90 touch-optimized active:scale-95">
                 <Github size={18} />
                 GitHub
               </a>

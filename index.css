@@ -13,6 +13,13 @@
   .mask-gradient-right {
     mask-image: linear-gradient(to right, black 80%, transparent 100%);
   }
+  .touch-optimized {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .active\:scale-98:active {
+    transform: scale(0.98);
+  }
 }
 
 @keyframes fade-in {
