@@ -198,7 +198,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
     scrollToSection(sectionId);
   }, []);
 
-  // Touch event handlers for swipe navigation
+  // Touch event handlers for vertical swipe navigation
   const handleTouchStart = useCallback((e: TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -208,29 +208,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
   const handleTouchMove = useCallback((e: TouchEvent) => {
     if (isScrolling.current) return;
 
-    const touchCurrentX = e.touches[0].clientX;
     const touchCurrentY = e.touches[0].clientY;
-    const diffX = Math.abs(touchCurrentX - touchStartX.current);
-    const diffY = Math.abs(touchCurrentY - touchStartY.current);
+    const diffY = touchCurrentY - touchStartY.current;
 
-    // If horizontal movement is greater than vertical, consider it as potential swipe
-    if (diffX > diffY && diffX > 30) {
+    // Detect vertical swipe (up or down)
+    if (Math.abs(diffY) > 60) {
       isScrolling.current = true;
 
-      // Threshold for swipe detection
-      if (diffX > 80) {
-        if (touchCurrentX < touchStartX.current) {
-          // Swipe left - next section
-          setCurrentSection(prev => Math.min(prev + 1, 2));
-        } else {
-          // Swipe right - previous section
-          setCurrentSection(prev => Math.max(prev - 1, 0));
-        }
-        // Reset scrolling flag after swipe
-        setTimeout(() => {
-          isScrolling.current = false;
-        }, 500);
+      if (diffY < -80) {
+        // Swipe up - next section
+        setCurrentSection(prev => Math.min(prev + 1, 2));
+      } else if (diffY > 80) {
+        // Swipe down - previous section
+        setCurrentSection(prev => Math.max(prev - 1, 0));
       }
+
+      setTimeout(() => {
+        isScrolling.current = false;
+      }, 500);
     }
   }, []);
 
@@ -330,9 +325,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
       {/* Swipe Hint (visible on touch devices) */}
       <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 opacity-50 animate-bounce md:hidden">
         <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <span className="transform rotate-180">←</span>
+          <span className="transform rotate-90">←</span>
           <span>滑动切换</span>
-          <span>→</span>
+          <span className="transform -rotate-90">→</span>
         </div>
       </div>
 
