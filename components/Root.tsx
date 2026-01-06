@@ -33,8 +33,8 @@ const Root: React.FC = () => {
       <React.Suspense fallback={
         <div className="flex items-center justify-center h-screen bg-zinc-50 dark:bg-zinc-950">
           <div className="text-center">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-accent-500 to-purple-600 flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <span className="text-white font-bold text-2xl">Z</span>
+            <div className="w-16 h-16 rounded-full bg-accent-600 flex items-center justify-center mx-auto mb-4 animate-pulse">
+              <span className="text-white font-bold text-2xl">z</span>
             </div>
             <p className="text-zinc-600 dark:text-zinc-400">Loading Zenote...</p>
           </div>
