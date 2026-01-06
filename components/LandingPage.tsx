@@ -153,9 +153,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
   const [currentSection, setCurrentSection] = useState(0);
   const sectionsRef = useRef<HTMLDivElement[]>([]);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
-  const isScrolling = useRef<boolean>(false);
+  const touchStartTime = useRef<number>(0);
 
   useEffect(() => {
     const savedLang = localStorage.getItem('zenote_landing_language');
@@ -198,39 +197,28 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
     scrollToSection(sectionId);
   }, []);
 
-  // Touch event handlers for vertical swipe navigation
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
-    isScrolling.current = false;
+    touchStartTime.current = Date.now();
   }, []);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (isScrolling.current) return;
-
-    const touchCurrentY = e.touches[0].clientY;
-    const diffY = touchCurrentY - touchStartY.current;
-
-    // Detect vertical swipe (up or down)
-    if (Math.abs(diffY) > 60) {
-      isScrolling.current = true;
-
-      if (diffY < -80) {
-        // Swipe up - next section
-        setCurrentSection(prev => Math.min(prev + 1, 2));
-      } else if (diffY > 80) {
-        // Swipe down - previous section
-        setCurrentSection(prev => Math.max(prev - 1, 0));
-      }
-
-      setTimeout(() => {
-        isScrolling.current = false;
-      }, 500);
-    }
+    e.preventDefault();
   }, []);
 
-  const handleTouchEnd = useCallback(() => {
-    isScrolling.current = false;
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    const touchEndY = e.changedTouches[0].clientY;
+    const diffY = touchStartY.current - touchEndY;
+    const timeDiff = Date.now() - touchStartTime.current;
+
+    // Quick swipe detection (within 300ms)
+    if (timeDiff < 300 && Math.abs(diffY) > 50) {
+      if (diffY > 0) {
+        setCurrentSection(prev => Math.min(prev + 1, 2));
+      } else {
+        setCurrentSection(prev => Math.max(prev - 1, 0));
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -277,9 +265,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
   }, [currentSection, scrollToSectionByIndex]);
 
   return (
-    <div id="landing-container" className={`min-h-screen touch-manipulation ${isDark ? 'dark' : ''}`}>
+    <div id="landing-container" className={`min-h-screen ${isDark ? 'dark' : ''}`}>
       <style>{`
-        html { scroll-behavior: smooth; touch-action: pan-y; }
+        html { scroll-behavior: smooth; overscroll-behavior-y: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .gradient-text {
@@ -294,42 +282,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetApp, onGoHome }) => {
         .touch-optimized {
           touch-action: manipulation;
           -webkit-tap-highlight-color: transparent;
-        }
-        .section-indicator {
-          transition: all 0.3s ease;
+          -webkit-touch-callout: none;
         }
         @media (hover: none) and (pointer: coarse) {
           button, a {
-            min-height: 44px;
-            min-width: 44px;
+            min-height: 48px;
+            min-width: 48px;
           }
         }
       `}</style>
-
-      {/* Section Indicator (visible on touch devices) */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex gap-2 section-indicator">
-        {[0, 1, 2].map((index) => (
-          <button
-            key={index}
-            onClick={() => setCurrentSection(index)}
-            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 touch-optimized ${
-              currentSection === index
-                ? 'bg-accent-600 w-8'
-                : 'bg-zinc-300 dark:bg-zinc-600 hover:bg-accent-400'
-            }`}
-            aria-label={`Go to section ${index + 1}`}
-          />
-        ))}
-      </div>
-
-      {/* Swipe Hint (visible on touch devices) */}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 opacity-50 animate-bounce md:hidden">
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <span className="transform rotate-90">←</span>
-          <span>滑动切换</span>
-          <span className="transform -rotate-90">→</span>
-        </div>
-      </div>
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
