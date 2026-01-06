@@ -142,28 +142,34 @@ const App: React.FC = () => {
     localStorage.setItem('zenote_language', language);
   }, [language]);
 
-  // Handle system navigation bar for Android
+  // Handle system navigation bar for Android - run immediately
   useEffect(() => {
-    const handleResize = () => {
-      // Set CSS custom properties for safe area insets
-      const top = getComputedStyle(document.documentElement).getPropertyValue('--sat') || 'env(safe-area-inset-top)';
-      const bottom = getComputedStyle(document.documentElement).getPropertyValue('--sab') || 'env(safe-area-inset-bottom)';
-      const left = getComputedStyle(document.documentElement).getPropertyValue('--sal') || 'env(safe-area-inset-left)';
-      const right = getComputedStyle(document.documentElement).getPropertyValue('--sar') || 'env(safe-area-inset-right)';
+    const setupSafeArea = () => {
+      // Get safe area values from CSS variables or use env() defaults
+      const sat = getComputedStyle(document.documentElement).getPropertyValue('--sat').trim() || 'env(safe-area-inset-top)';
+      const sab = getComputedStyle(document.documentElement).getPropertyValue('--sab').trim() || 'env(safe-area-inset-bottom)';
+      const sal = getComputedStyle(document.documentElement).getPropertyValue('--sal').trim() || 'env(safe-area-inset-left)';
+      const sar = getComputedStyle(document.documentElement).getPropertyValue('--sar').trim() || 'env(safe-area-inset-right)';
 
-      document.documentElement.style.setProperty('--sat', top);
-      document.documentElement.style.setProperty('--sab', bottom);
-      document.documentElement.style.setProperty('--sal', left);
-      document.documentElement.style.setProperty('--sar', right);
+      // Set CSS custom properties
+      document.documentElement.style.setProperty('--sat', sat);
+      document.documentElement.style.setProperty('--sab', sab);
+      document.documentElement.style.setProperty('--sal', sal);
+      document.documentElement.style.setProperty('--sar', sar);
     };
 
-    // Initial setup
-    handleResize();
+    // Setup immediately
+    setupSafeArea();
+
+    // Also setup after a short delay to ensure DOM is ready
+    const timeoutId = setTimeout(setupSafeArea, 100);
 
     // Listen for resize events which might happen when keyboard appears/disappears
+    const handleResize = setupSafeArea;
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timeoutId);
       window.removeEventListener('resize', handleResize);
     };
   }, []);
