@@ -15,6 +15,18 @@ const Root: React.FC = () => {
     setView('landing');
   }, []);
 
+  const handleEnterApp = useCallback(() => {
+    // Reset scroll position and body styles before entering app
+    window.scrollTo(0, 0);
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.backgroundColor = '';
+    document.documentElement.style.overflow = '';
+    document.documentElement.style.scrollBehavior = '';
+    document.documentElement.style.overscrollBehavior = '';
+    setView('app');
+  }, []);
+
   if (view === 'app') {
     const App = React.lazy(() => import('../App'));
     return (
@@ -33,7 +45,7 @@ const Root: React.FC = () => {
     );
   }
 
-  return <LandingPage onGetApp={() => setView('app')} onGoHome={handleGoHome} />;
+  return <LandingPage onGetApp={handleEnterApp} onGoHome={handleGoHome} />;
 };
 
 export default Root;
