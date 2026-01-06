@@ -1929,7 +1929,14 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen pt-safe pb-safe bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
+    <>
+      <style>{`
+        html { 
+          scroll-behavior: auto !important; 
+          overscroll-behavior-y: auto !important;
+        }
+      `}</style>
+      <div className="flex h-screen pt-safe pb-safe bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
@@ -1978,6 +1985,7 @@ const App: React.FC = () => {
       {/* Settings Modal */}
       {showSettings && <SettingsModal />}
     </div>
+    </>
   );
 };
 
