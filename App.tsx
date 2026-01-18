@@ -608,7 +608,7 @@ const App: React.FC = () => {
     // Use proxy path for Nutstore in both local development and Vercel environment
     let clientUrl = url;
     if (isBrowser && isNutstore) {
-      // 简化逻辑：对于坚果云，直接使用 /dav/ 代理路径
+      // For Nutstore, use the full proxy path that matches Vercel rewrite rules
       clientUrl = '/dav/';
       console.log('Using proxy URL for Nutstore:', clientUrl, 'in', isLocalDev ? 'local' : 'Vercel', 'environment');
     }
@@ -854,7 +854,7 @@ const App: React.FC = () => {
     // Use proxy path for Nutstore in both local development and Vercel environment
     let clientUrl = url;
     if (isBrowser && isNutstore) {
-      // 简化逻辑：对于坚果云，直接使用 /dav/ 代理路径
+      // For Nutstore, use the full proxy path that matches Vercel rewrite rules
       clientUrl = '/dav/';
       console.log('Using proxy URL for Nutstore:', clientUrl, 'in', isLocalDev ? 'local' : 'Vercel', 'environment');
     }
