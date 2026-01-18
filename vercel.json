@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/dav/(.*)",
+      "destination": "https://dav.jianguoyun.com/dav/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/dav/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, PROPFIND, OPTIONS, MKCOL, COPY, MOVE"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Authorization, Content-Type, Depth, Destination, Overwrite, X-Requested-With"
+        },
+        {
+          "key": "Access-Control-Expose-Headers",
+          "value": "DAV, Content-Length, Allow"
+        }
+      ]
+    }
+  ]
+}
