@@ -617,7 +617,6 @@ const App: React.FC = () => {
     const client = createClient(clientUrl, {
       username,
       password,
-      timeout: 30000,
       headers: {
         'User-Agent': 'Zenote WebDAV Client',
         'Accept': '*/*',
@@ -870,8 +869,6 @@ const App: React.FC = () => {
     const client = createClient(clientUrl, {
       username,
       password,
-      // 增加超时时间
-      timeout: 30000,
       // 添加坚果云特定的请求头，与测试页面一致
       headers: {
         'User-Agent': 'Zenote WebDAV Client',
