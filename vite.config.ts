@@ -10,11 +10,10 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         proxy: {
           // WebDAV proxy configuration for development environment
-          // 只代理 /dav 路径，避免影响主应用
-          '/dav': {
+          '^/dav': {
             target: 'https://dav.jianguoyun.com',
             changeOrigin: true,
-            secure: true,
+            secure: false,
             rewrite: (path) => path,
             configure: (proxy, options) => {
               // Add debug logging
